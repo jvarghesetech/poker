@@ -82,6 +82,25 @@ HAND_NAMES = {
     2: "Two Pair", 1: "One Pair", 0: "High Card"
 }
 
+# ─── Side Pots ────────────────────────────────────────────────────────────────
+
+def compute_side_pots(contributions):
+    """
+    contributions: list of (name, amount_invested, folded)
+    Returns list of {'amount': int, 'eligible': [name]}
+    """
+    levels = sorted(set(amt for _, amt, _ in contributions if amt > 0))
+    pots = []
+    prev = 0
+    for lvl in levels:
+        at_level = [(name, folded) for name, amt, folded in contributions if amt >= lvl]
+        pot_amount = (lvl - prev) * len(at_level)
+        eligible = [name for name, folded in at_level if not folded]
+        if pot_amount > 0 and eligible:
+            pots.append({'amount': pot_amount, 'eligible': eligible})
+        prev = lvl
+    return pots
+
 # ─── AI Players ───────────────────────────────────────────────────────────────
 
 PERSONAS = ['tight', 'aggressive', 'loose', 'maniac']
@@ -203,7 +222,7 @@ def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
     if to_call == 0:
         print(f"  Actions: [c]heck  [r]aise  [f]old")
     else:
-        print(f"  Actions: [c]all ${to_call:.2f}  [r]aise  [f]old")
+        print(f"  Actions: [c]all ${to_call:.2f}  [r]aise  [a]ll-in ${balance:.2f}  [f]old")
 
     while True:
         choice = input("  > ").strip().lower()
@@ -221,6 +240,12 @@ def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
                 pot += call_amt
                 print(dim(f"  Called ${call_amt:.2f}."))
                 return balance, pot, 'call'
+
+        elif choice == 'a' and to_call > 0:
+            pot += balance
+            print(yellow(f"  ALL-IN! ${balance:.2f}"))
+            balance = 0
+            return balance, pot, 'allin'
 
         elif choice == 'r':
             min_raise_to = current_bet + last_raise
@@ -405,23 +430,32 @@ def play_game():
             else:
                 print(dim(f"\n  {ai.name} ({ai.persona}): folded"))
 
-        best_opp_score = max(opponents, key=lambda x: (x[2][0], x[2][1]))[2] if opponents else (0, [])
-        p = (player_score[0], player_score[1])
-        o = (best_opp_score[0], best_opp_score[1])
+        # Build contributions for side pot calc (simplified: equal investment assumed)
+        contributions = [('You', pot // num_players, False)]
+        for ai in ai_players:
+            contributions.append((ai.name, pot // num_players, ai_folded[ai.name]))
+        pots = compute_side_pots(contributions)
+
+        all_scores = {'You': (player_score[0], player_score[1])}
+        for name, hand, score in opponents:
+            all_scores[name] = (score[0], score[1])
 
         print()
-        if p > o:
-            print(green(bold(f"  ★  YOU WIN!  Pot: ${pot:.2f}")))
-            balance += pot
-            print(f"  Net result:  {color_money(pot - big_blind)}")
-        elif p == o:
-            split = pot / (num_players)
-            print(yellow(f"  ★  TIE! You split ${pot:.2f} — you get ${split:.2f}"))
-            balance += split
-            print(f"  Net result:  {color_money(split - big_blind)}")
-        else:
-            print(red(f"  ✗  You lose. Pot goes to opponent."))
-            print(f"  Net result:  {color_money(-big_blind)}")
+        balance_before = balance
+        for sp in pots:
+            eligible = sp['eligible']
+            best = max(eligible, key=lambda n: all_scores.get(n, (0, [])))
+            best_score = all_scores.get(best, (0, []))
+            winners = [n for n in eligible if all_scores.get(n, (0, [])) == best_score]
+            split = sp['amount'] / len(winners)
+            if 'You' in winners:
+                balance += split
+                print(green(bold(f"  ★  YOU WIN ${split:.2f}!")) + f"  ({HAND_NAMES[player_score[0]]})")
+            else:
+                print(red(f"  ✗  {winners[0]} wins ${split:.2f}."))
+
+        net = balance - balance_before - big_blind
+        print(f"  Net result:  {color_money(net)}")
 
         print(f"\n  Bankroll: ${balance:.2f}")
 
