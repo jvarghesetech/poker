@@ -549,6 +549,111 @@ def play_game(practice=False):
 
     stats.show(balance)
 
+# ─── Tournament Mode ──────────────────────────────────────────────────────────
+
+def play_tournament():
+    print_banner()
+    print(yellow(bold("  [TOURNAMENT MODE] — Last player standing wins!")))
+
+    while True:
+        try:
+            buy_in = float(input("\n  Buy-in amount: $"))
+            if buy_in > 0: break
+        except ValueError:
+            print("  Enter a number.")
+
+    while True:
+        try:
+            num_players = int(input("  Number of players (2-9): "))
+            if 2 <= num_players <= 9: break
+        except ValueError:
+            print("  Enter a number.")
+
+    prize_pool = buy_in * num_players
+    print(green(f"\n  Prize pool: ${prize_pool:.2f}  — winner takes all!"))
+
+    stacks = {'You': buy_in}
+    ai_players = [AIPlayer(AI_NAMES[i]) for i in range(num_players - 1)]
+    for ai in ai_players:
+        stacks[ai.name] = buy_in
+        print(f"    {ai.name} — {dim(ai.persona)}")
+
+    hand_num = 0
+
+    while True:
+        alive = [p for p in ['You'] + [ai.name for ai in ai_players] if stacks.get(p, 0) > 0]
+        if 'You' not in alive:
+            print(red("\n  You've been eliminated! Tournament over."))
+            break
+        if len(alive) == 1:
+            print(green(bold(f"\n  ★★★  {'YOU WIN' if alive[0] == 'You' else alive[0] + ' WINS'} THE TOURNAMENT!  ★★★")))
+            if alive[0] == 'You':
+                print(green(f"  Prize: ${prize_pool:.2f}"))
+            break
+
+        hand_num += 1
+        # Blinds increase every 5 hands
+        level = hand_num // 5
+        small_blind = max(1.0, round(buy_in * 0.02 * (1.5 ** level), 2))
+        big_blind = small_blind * 2
+
+        print(f"\n{'─'*55}")
+        print(bold(f"  HAND #{hand_num} — {len(alive)} players left"))
+        print(f"  Blinds: ${small_blind:.2f} / ${big_blind:.2f}")
+        print(f"  Stacks: " + "  ".join(f"{p}: ${stacks[p]:.0f}" for p in alive))
+
+        # Simple tournament hand: you vs AI
+        deck = make_deck()
+        random.shuffle(deck)
+        player_hand = [deck.pop(), deck.pop()]
+        community = []
+        for _ in range(3): community.append(deck.pop())
+        community.append(deck.pop())
+        community.append(deck.pop())
+
+        print(f"\n  Your hand: {hand_str(player_hand)}")
+        print(f"  Board:     {hand_str(community)}")
+
+        player_score = evaluate_hand(player_hand + community)
+        print(f"  Your best: {bold(HAND_NAMES[player_score[0]])}")
+
+        pot = big_blind * len(alive)
+        results = {'You': (player_score[0], player_score[1])}
+
+        for ai in ai_players:
+            if ai.name in alive:
+                ai_hand = [deck.pop(), deck.pop()]
+                ai_score = evaluate_hand(ai_hand + community)
+                results[ai.name] = (ai_score[0], ai_score[1])
+                print(f"  {ai.name}: {hand_str(ai_hand)}  →  {HAND_NAMES[ai_score[0]]}")
+
+        best = max(results.values())
+        winners = [n for n, s in results.items() if s == best]
+        share = pot / len(winners)
+
+        print()
+        for w in winners:
+            stacks[w] = stacks.get(w, 0) + share
+            if w == 'You':
+                print(green(bold(f"  ★  YOU WIN ${share:.2f}!")))
+            else:
+                print(dim(f"  {w} wins ${share:.2f}."))
+
+        # Deduct blinds from losers (simplified)
+        for p in alive:
+            if p not in winners:
+                stacks[p] = max(0, stacks[p] - big_blind)
+
+        # Eliminate busted players
+        for p in list(alive):
+            if stacks.get(p, 0) <= 0 and p != 'You':
+                print(red(f"  {p} eliminated!"))
+
+        if input("\n  Next hand? [y/n]: ").strip().lower() != 'y':
+            break
+
+    print(f"\n  Final stack: ${stacks.get('You', 0):.2f}\n")
+
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
 def main():
@@ -557,7 +662,8 @@ def main():
     print(bold("="*55))
     print("  [1] Cash Game")
     print("  [2] Practice Mode  (see opponent hands)")
-    print("  [3] Quit")
+    print("  [3] Tournament Mode")
+    print("  [4] Quit")
     while True:
         choice = input("\n  Choose: ").strip()
         if choice == '1':
@@ -565,10 +671,12 @@ def main():
         elif choice == '2':
             play_game(practice=True)
         elif choice == '3':
+            play_tournament()
+        elif choice == '4':
             print("\n  Thanks for playing!\n")
             break
         else:
-            print("  Enter 1, 2, or 3.")
+            print("  Enter 1-4.")
 
 if __name__ == "__main__":
     main()
