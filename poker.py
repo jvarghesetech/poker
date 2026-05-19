@@ -217,6 +217,15 @@ def print_prob_bar(win_pct):
     bar = f"{color}{'█' * filled}{RESET}{dim('░' * (20 - filled))}"
     print(f"  Win chance:  [{bar}] {win_pct:.1f}%")
 
+def print_ev(win_pct, to_call, pot):
+    """Show expected value of calling."""
+    if to_call <= 0:
+        return
+    win_prob = win_pct / 100
+    ev = win_prob * pot - (1 - win_prob) * to_call
+    ev_str = green(f"+${ev:.2f}") if ev >= 0 else red(f"-${abs(ev):.2f}")
+    print(f"  EV of call:  {ev_str}")
+
 def color_money(amount):
     if amount > 0:
         return green(f"+${amount:.2f}")
@@ -238,6 +247,9 @@ def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
     to_call = current_bet  # human has put in $0 this street
     print(f"\n  Pot: {yellow(f'${pot:.2f}')}   To call: ${to_call:.2f}   Stack: {green(f'${balance:.2f}')}")
 
+    if to_call > 0:
+        pot_odds = to_call / (pot + to_call) * 100
+        print(f"  Pot odds: need >{pot_odds:.0f}% win chance to call profitably")
     if to_call == 0:
         print(f"  Actions: [c]heck  [r]aise  [f]old")
     else:
@@ -384,6 +396,7 @@ def play_game():
         win_pct, tie_pct = estimate_win_probability(player_hand, community, num_players)
         print_prob_bar(win_pct)
         print(f"  Tie chance: {tie_pct:.1f}%")
+        print_ev(win_pct, big_blind, pot)
 
         balance, pot, action = betting_round(balance, pot, "preflop", current_bet=big_blind)
         if action == 'fold':
