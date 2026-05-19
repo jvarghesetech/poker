@@ -82,6 +82,25 @@ HAND_NAMES = {
     2: "Two Pair", 1: "One Pair", 0: "High Card"
 }
 
+# ─── Save / Load ──────────────────────────────────────────────────────────────
+
+import json, os
+SAVE_FILE = os.path.expanduser("~/.poker_save.json")
+
+def save_bankroll(balance):
+    with open(SAVE_FILE, 'w') as f:
+        json.dump({'balance': balance}, f)
+    print(dim(f"  Bankroll saved: ${balance:.2f}"))
+
+def load_bankroll():
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE) as f:
+                return json.load(f).get('balance')
+        except Exception:
+            pass
+    return None
+
 # ─── Side Pots ────────────────────────────────────────────────────────────────
 
 def compute_side_pots(contributions):
@@ -276,15 +295,23 @@ def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
 def play_game():
     print_banner()
 
-    # Starting bankroll
-    while True:
-        try:
-            balance = float(input("\n  Enter your starting bankroll: $"))
-            if balance > 0:
-                break
-            print("  Must be positive.")
-        except ValueError:
-            print("  Enter a number.")
+    # Starting bankroll — offer to load saved
+    saved = load_bankroll()
+    balance = None
+    if saved:
+        choice = input(f"\n  Saved bankroll found: ${saved:.2f}. Load it? [y/n]: ").strip().lower()
+        if choice == 'y':
+            balance = saved
+            print(green(f"  Loaded ${balance:.2f}"))
+    if balance is None:
+        while True:
+            try:
+                balance = float(input("\n  Enter starting bankroll: $"))
+                if balance > 0:
+                    break
+                print("  Must be positive.")
+            except ValueError:
+                print("  Enter a number.")
 
     # Number of players
     while True:
@@ -458,6 +485,7 @@ def play_game():
         print(f"  Net result:  {color_money(net)}")
 
         print(f"\n  Bankroll: ${balance:.2f}")
+        save_bankroll(balance)
 
         # Play again?
         again = input("\n  Play another hand? [y/n]: ").strip().lower()
