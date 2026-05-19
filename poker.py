@@ -2,6 +2,21 @@ import random
 from collections import Counter
 from itertools import combinations
 
+# ─── Colors ───────────────────────────────────────────────────────────────────
+
+RESET  = "\033[0m"
+BOLD   = "\033[1m"
+DIM    = "\033[2m"
+RED    = "\033[91m"
+GREEN  = "\033[92m"
+YELLOW = "\033[93m"
+
+def red(s):    return f"{RED}{s}{RESET}"
+def green(s):  return f"{GREEN}{s}{RESET}"
+def yellow(s): return f"{YELLOW}{s}{RESET}"
+def bold(s):   return f"{BOLD}{s}{RESET}"
+def dim(s):    return f"{DIM}{s}{RESET}"
+
 # ─── Card Setup ───────────────────────────────────────────────────────────────
 
 SUITS = ['♠', '♥', '♦', '♣']
@@ -12,7 +27,8 @@ def make_deck():
     return [(r, s) for s in SUITS for r in RANKS]
 
 def card_str(card):
-    return f"{card[0]}{card[1]}"
+    r, s = card
+    return red(f"{r}{s}") if s in ('♥', '♦') else f"{r}{s}"
 
 def hand_str(cards):
     return "  ".join(card_str(c) for c in cards)
@@ -111,9 +127,9 @@ def estimate_win_probability(player_hand, community_cards, num_players, simulati
 # ─── Display ──────────────────────────────────────────────────────────────────
 
 def print_banner():
-    print("\n" + "="*55)
-    print("          ♠ ♥  TEXAS HOLD'EM POKER  ♦ ♣")
-    print("="*55)
+    print("\n" + bold("="*55))
+    print(bold("          ♠ ♥  TEXAS HOLD'EM POKER  ♦ ♣"))
+    print(bold("="*55))
 
 def print_table(community, stage):
     labels = {"preflop": "", "flop": "FLOP", "turn": "TURN", "river": "RIVER"}
@@ -125,14 +141,15 @@ def print_table(community, stage):
 
 def print_prob_bar(win_pct):
     filled = int(win_pct / 5)
-    bar = "█" * filled + "░" * (20 - filled)
+    color = GREEN if win_pct >= 50 else (YELLOW if win_pct >= 30 else RED)
+    bar = f"{color}{'█' * filled}{RESET}{dim('░' * (20 - filled))}"
     print(f"  Win chance:  [{bar}] {win_pct:.1f}%")
 
 def color_money(amount):
     if amount > 0:
-        return f"+${amount:.2f}"
+        return green(f"+${amount:.2f}")
     elif amount < 0:
-        return f"-${abs(amount):.2f}"
+        return red(f"-${abs(amount):.2f}")
     return f"${amount:.2f}"
 
 # ─── Betting ──────────────────────────────────────────────────────────────────
@@ -302,16 +319,16 @@ def play_game():
 
         print()
         if p > o:
-            print(f"  ★  YOU WIN!  Pot: ${pot:.2f}")
+            print(green(bold(f"  ★  YOU WIN!  Pot: ${pot:.2f}")))
             balance += pot
             print(f"  Net result:  {color_money(pot - big_blind)}")
         elif p == o:
             split = pot / (num_players)
-            print(f"  ★  TIE! You split ${pot:.2f} — you get ${split:.2f}")
+            print(yellow(f"  ★  TIE! You split ${pot:.2f} — you get ${split:.2f}"))
             balance += split
             print(f"  Net result:  {color_money(split - big_blind)}")
         else:
-            print(f"  ✗  You lose. Pot goes to opponent.")
+            print(red(f"  ✗  You lose. Pot goes to opponent."))
             print(f"  Net result:  {color_money(-big_blind)}")
 
         print(f"\n  Bankroll: ${balance:.2f}")
