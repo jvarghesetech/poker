@@ -82,6 +82,38 @@ HAND_NAMES = {
     2: "Two Pair", 1: "One Pair", 0: "High Card"
 }
 
+# ─── Session Stats ────────────────────────────────────────────────────────────
+
+class Stats:
+    def __init__(self, starting_balance):
+        self.start = starting_balance
+        self.hands = 0
+        self.wins = 0
+        self.biggest_pot = 0
+
+    def record_win(self, pot):
+        self.hands += 1
+        self.wins += 1
+        self.biggest_pot = max(self.biggest_pot, pot)
+
+    def record_loss(self):
+        self.hands += 1
+
+    def show(self, final_balance):
+        net = final_balance - self.start
+        win_rate = self.wins / self.hands * 100 if self.hands else 0
+        net_str = green(f"+${net:.2f}") if net >= 0 else red(f"-${abs(net):.2f}")
+        print(f"\n{bold('═'*45)}")
+        print(bold("  SESSION STATS"))
+        print(bold('═'*45))
+        print(f"  Hands played:   {self.hands}")
+        print(f"  Win rate:       {win_rate:.1f}%")
+        print(f"  Biggest pot:    ${self.biggest_pot:.2f}")
+        print(f"  Starting stack: ${self.start:.2f}")
+        print(f"  Final stack:    ${final_balance:.2f}")
+        print(f"  Net profit:     {net_str}")
+        print(bold('═'*45))
+
 # ─── Save / Load ──────────────────────────────────────────────────────────────
 
 import json, os
@@ -342,6 +374,7 @@ def play_game(practice=False):
     for ai in ai_players:
         print(f"    {ai.name} — {dim(ai.persona)}")
 
+    stats = Stats(balance)
     game_count = 0
 
     while balance > 0:
@@ -497,8 +530,10 @@ def play_game(practice=False):
             split = sp['amount'] / len(winners)
             if 'You' in winners:
                 balance += split
+                stats.record_win(split)
                 print(green(bold(f"  ★  YOU WIN ${split:.2f}!")) + f"  ({HAND_NAMES[player_score[0]]})")
             else:
+                stats.record_loss()
                 print(red(f"  ✗  {winners[0]} wins ${split:.2f}."))
 
         net = balance - balance_before - big_blind
@@ -512,10 +547,7 @@ def play_game(practice=False):
         if again != 'y':
             break
 
-    print(f"\n{'='*55}")
-    print(f"  Final Bankroll: ${balance:.2f}")
-    print(f"  Hands played:   {game_count}")
-    print(f"{'='*55}\n")
+    stats.show(balance)
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
