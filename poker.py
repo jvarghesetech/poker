@@ -188,34 +188,63 @@ def color_money(amount):
 
 # ─── Betting ──────────────────────────────────────────────────────────────────
 
-def betting_round(balance, pot, stage, min_bet=0):
-    print(f"\n  Your balance: ${balance:.2f}  |  Pot: ${pot:.2f}")
-    print(f"  Options: [b]et  [c]heck/call  [f]old")
+def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
+    """
+    current_bet: the total bet amount players must match this street.
+    last_raise:  size of the last raise (min re-raise must be >= this).
+    Returns (new_balance, new_pot, action).
+    """
+    if last_raise is None:
+        last_raise = current_bet if current_bet > 0 else 1
+
+    to_call = current_bet  # human has put in $0 this street
+    print(f"\n  Pot: {yellow(f'${pot:.2f}')}   To call: ${to_call:.2f}   Stack: {green(f'${balance:.2f}')}")
+
+    if to_call == 0:
+        print(f"  Actions: [c]heck  [r]aise  [f]old")
+    else:
+        print(f"  Actions: [c]all ${to_call:.2f}  [r]aise  [f]old")
+
     while True:
         choice = input("  > ").strip().lower()
+
         if choice == 'f':
             return balance, pot, 'fold'
-        elif choice in ('c', 'check', 'call'):
-            if min_bet > 0:
-                call_amt = min(min_bet, balance)
-                print(f"  Calling ${call_amt:.2f}")
-                return balance - call_amt, pot + call_amt, 'call'
-            print("  Checked.")
-            return balance, pot, 'check'
-        elif choice == 'b':
-            while True:
-                try:
-                    amt = float(input(f"  Bet amount (max ${balance:.2f}): $"))
-                    if amt <= 0:
-                        print("  Must be positive.")
-                    elif amt > balance:
-                        print(f"  You only have ${balance:.2f}.")
-                    else:
-                        return balance - amt, pot + amt, amt
-                except ValueError:
-                    print("  Enter a number.")
+
+        elif choice == 'c':
+            if to_call == 0:
+                print(dim("  Checked."))
+                return balance, pot, 'check'
+            else:
+                call_amt = min(to_call, balance)
+                balance -= call_amt
+                pot += call_amt
+                print(dim(f"  Called ${call_amt:.2f}."))
+                return balance, pot, 'call'
+
+        elif choice == 'r':
+            min_raise_to = current_bet + last_raise
+            print(f"  Min raise to: ${min_raise_to:.2f}   Your stack: ${balance:.2f}")
+            try:
+                raise_to = float(input("  Raise to total: $"))
+            except ValueError:
+                print("  Enter a number.")
+                continue
+            if raise_to < min_raise_to:
+                print(f"  Must raise to at least ${min_raise_to:.2f}")
+                continue
+            if raise_to > balance + current_bet:
+                print(f"  Not enough chips. Max raise to: ${balance + current_bet:.2f}")
+                continue
+            amount_to_add = raise_to - current_bet   # what player adds to pot
+            amount_to_add = min(amount_to_add, balance)
+            balance -= amount_to_add
+            pot += amount_to_add
+            print(dim(f"  Raised to ${raise_to:.2f}."))
+            return balance, pot, raise_to   # return new current_bet level
+
         else:
-            print("  Type b, c, or f.")
+            print("  Type c, r, or f.")
 
 # ─── Main Game ────────────────────────────────────────────────────────────────
 
@@ -304,7 +333,7 @@ def play_game():
         print_prob_bar(win_pct)
         print(f"  Tie chance: {tie_pct:.1f}%")
 
-        balance, pot, action = betting_round(balance, pot, "preflop", min_bet=big_blind)
+        balance, pot, action = betting_round(balance, pot, "preflop", current_bet=big_blind)
         if action == 'fold':
             print(f"\n  You folded. Lost ${big_blind:.2f} (blind).")
             print(f"  Bankroll: ${balance:.2f}")
@@ -319,7 +348,7 @@ def play_game():
         win_pct, tie_pct = estimate_win_probability(player_hand, community, num_players)
         print_prob_bar(win_pct)
 
-        balance, pot, action = betting_round(balance, pot, "flop")
+        balance, pot, action = betting_round(balance, pot, "flop", current_bet=0)
         if action == 'fold':
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
@@ -334,7 +363,7 @@ def play_game():
         win_pct, tie_pct = estimate_win_probability(player_hand, community, num_players)
         print_prob_bar(win_pct)
 
-        balance, pot, action = betting_round(balance, pot, "turn")
+        balance, pot, action = betting_round(balance, pot, "turn", current_bet=0)
         if action == 'fold':
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
@@ -349,7 +378,7 @@ def play_game():
         win_pct, tie_pct = estimate_win_probability(player_hand, community, num_players)
         print_prob_bar(win_pct)
 
-        balance, pot, action = betting_round(balance, pot, "river")
+        balance, pot, action = betting_round(balance, pot, "river", current_bet=0)
         if action == 'fold':
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
