@@ -304,8 +304,10 @@ def betting_round(balance, pot, stage, current_bet=0, last_raise=None):
 
 # ─── Main Game ────────────────────────────────────────────────────────────────
 
-def play_game():
+def play_game(practice=False):
     print_banner()
+    if practice:
+        print(yellow(bold("  [PRACTICE MODE] — Opponent hands are shown face-up")))
 
     # Starting bankroll — offer to load saved
     saved = load_bankroll()
@@ -375,6 +377,11 @@ def play_game():
         # Deal AI hands
         ai_hands = {ai.name: [deck.pop(), deck.pop()] for ai in ai_players}
         ai_folded = {ai.name: False for ai in ai_players}
+
+        if practice:
+            print("\n  Opponent hands (practice):")
+            for ai in ai_players:
+                print(f"    {ai.name}: {hand_str(ai_hands[ai.name])}")
 
         def ai_street_action(community_cards):
             nonlocal pot
@@ -512,5 +519,24 @@ def play_game():
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
+def main():
+    print("\n" + bold("="*55))
+    print(bold("          ♠ ♥  TEXAS HOLD'EM POKER  ♦ ♣"))
+    print(bold("="*55))
+    print("  [1] Cash Game")
+    print("  [2] Practice Mode  (see opponent hands)")
+    print("  [3] Quit")
+    while True:
+        choice = input("\n  Choose: ").strip()
+        if choice == '1':
+            play_game(practice=False)
+        elif choice == '2':
+            play_game(practice=True)
+        elif choice == '3':
+            print("\n  Thanks for playing!\n")
+            break
+        else:
+            print("  Enter 1, 2, or 3.")
+
 if __name__ == "__main__":
-    play_game()
+    main()
