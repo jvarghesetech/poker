@@ -82,6 +82,40 @@ HAND_NAMES = {
     2: "Two Pair", 1: "One Pair", 0: "High Card"
 }
 
+# ─── AI Players ───────────────────────────────────────────────────────────────
+
+PERSONAS = ['tight', 'aggressive', 'loose', 'maniac']
+AI_NAMES = ['Alex', 'Blake', 'Casey', 'Dana', 'Eddie', 'Fran', 'Gabe', 'Harper']
+
+class AIPlayer:
+    def __init__(self, name, persona=None):
+        self.name = name
+        self.persona = persona or random.choice(PERSONAS)
+
+    def decide(self, win_pct, to_call, pot):
+        """Returns ('fold'|'call'|'check'|'raise', raise_amount)"""
+        bluff = random.random() < 0.10
+        p = self.persona
+
+        if p == 'tight':
+            if win_pct > 65 or bluff:     return ('raise', int(pot * 0.75))
+            if win_pct > 35:              return ('call', to_call)
+            return ('fold', 0)
+
+        elif p == 'aggressive':
+            if win_pct > 40 or bluff:     return ('raise', int(pot * 1.0))
+            if win_pct > 22:              return ('call', to_call)
+            return ('fold', 0)
+
+        elif p == 'loose':
+            if win_pct > 55:              return ('raise', int(pot * 0.5))
+            if win_pct > 18 or bluff:     return ('call', to_call)
+            return ('fold', 0)
+
+        else:  # maniac
+            if random.random() < 0.65:    return ('raise', int(pot * 1.5))
+            return ('call', to_call)
+
 # ─── Win Probability via Monte Carlo ──────────────────────────────────────────
 
 def estimate_win_probability(player_hand, community_cards, num_players, simulations=2000):
@@ -208,6 +242,11 @@ def play_game():
         except ValueError:
             print("  Enter a number.")
 
+    ai_players = [AIPlayer(AI_NAMES[i]) for i in range(num_players - 1)]
+    print("\n  Opponents:")
+    for ai in ai_players:
+        print(f"    {ai.name} — {dim(ai.persona)}")
+
     game_count = 0
 
     while balance > 0:
@@ -240,6 +279,25 @@ def play_game():
         score = evaluate_hand(player_hand + community)
         print(f"  Hand rank:  {HAND_NAMES[score[0]]}")
 
+        # Deal AI hands
+        ai_hands = {ai.name: [deck.pop(), deck.pop()] for ai in ai_players}
+        ai_folded = {ai.name: False for ai in ai_players}
+
+        def ai_street_action(community_cards):
+            nonlocal pot
+            active_ai = [ai for ai in ai_players if not ai_folded[ai.name]]
+            for ai in active_ai:
+                ai_wp, _ = estimate_win_probability(ai_hands[ai.name], community_cards, num_players, simulations=400)
+                action, raise_amt = ai.decide(ai_wp, 0, pot)
+                if action == 'fold':
+                    ai_folded[ai.name] = True
+                    print(dim(f"  {ai.name} ({ai.persona}) folds."))
+                elif action == 'raise' and raise_amt > 0:
+                    pot += raise_amt
+                    print(dim(f"  {ai.name} ({ai.persona}) raises ${raise_amt:.2f}."))
+                else:
+                    print(dim(f"  {ai.name} ({ai.persona}) calls."))
+
         # ── Pre-flop ──
         print_table(community, "preflop")
         win_pct, tie_pct = estimate_win_probability(player_hand, community, num_players)
@@ -251,6 +309,7 @@ def play_game():
             print(f"\n  You folded. Lost ${big_blind:.2f} (blind).")
             print(f"  Bankroll: ${balance:.2f}")
             continue
+        ai_street_action(community)
 
         # ── Flop ──
         community += [deck.pop(), deck.pop(), deck.pop()]
@@ -265,6 +324,7 @@ def play_game():
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
             continue
+        ai_street_action(community)
 
         # ── Turn ──
         community.append(deck.pop())
@@ -279,6 +339,7 @@ def play_game():
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
             continue
+        ai_street_action(community)
 
         # ── River ──
         community.append(deck.pop())
@@ -293,27 +354,29 @@ def play_game():
             print(f"\n  You folded.")
             print(f"  Bankroll: ${balance:.2f}")
             continue
+        ai_street_action(community)
 
         # ── Showdown ──
         print(f"\n{'─'*55}")
-        print("  ♦  SHOWDOWN  ♦")
+        print(bold("  ♦  SHOWDOWN  ♦"))
         print(f"{'─'*55}")
-        print(f"  Your hand:   {hand_str(player_hand)}")
         print(f"  Board:       {hand_str(community)}")
+        print(f"  Your hand:   {hand_str(player_hand)}")
 
         player_score = evaluate_hand(player_hand + community)
-        print(f"  Your best:   {HAND_NAMES[player_score[0]]}")
+        print(f"  Your best:   {bold(HAND_NAMES[player_score[0]])}")
 
-        # Simulate opponents' hands
         opponents = []
-        for i in range(num_players - 1):
-            opp_hand = [deck.pop(), deck.pop()]
-            opp_score = evaluate_hand(opp_hand + community)
-            opponents.append((opp_hand, opp_score))
-            print(f"\n  Opponent {i+1}: {hand_str(opp_hand)}  →  {HAND_NAMES[opp_score[0]]}")
+        for ai in ai_players:
+            if not ai_folded[ai.name]:
+                opp_hand = ai_hands[ai.name]
+                opp_score = evaluate_hand(opp_hand + community)
+                opponents.append((ai.name, opp_hand, opp_score))
+                print(f"\n  {ai.name} ({dim(ai.persona)}): {hand_str(opp_hand)}  →  {HAND_NAMES[opp_score[0]]}")
+            else:
+                print(dim(f"\n  {ai.name} ({ai.persona}): folded"))
 
-        # Determine winner
-        best_opp_score = max(opponents, key=lambda x: (x[1][0], x[1][1]))[1] if opponents else (0, [])
+        best_opp_score = max(opponents, key=lambda x: (x[2][0], x[2][1]))[2] if opponents else (0, [])
         p = (player_score[0], player_score[1])
         o = (best_opp_score[0], best_opp_score[1])
 
